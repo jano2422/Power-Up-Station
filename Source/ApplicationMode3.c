@@ -58,6 +58,7 @@
 #include "Control.PXI6528.h"
 #include "FixtureSlot.h"
 #include "MultiDutUi.h"
+#include "PANEL_SCAN.h"
 // **********CAN G-API***********
 
 // *****************************
@@ -87,66 +88,202 @@ char g_szStationId[20];
 #define CTRL_SCAN_DUT_SERIAL 2001
 int CVICALLBACK UI_ScanDutSerial (int panel, int control, int event,
         void *callbackData, int eventData1, int eventData2);
-//************************************************************************************************
-// RunSpsTestprogramm.c
-extern Boolean g_boTesterOk;
-//ApplicationTools.c
-extern char g_szErrorFilePath [500];
 
-// wipmama.dll
-extern short __stdcall con_Exit(void);
-// Test_VXX.c
-extern 		int DefineMeasArray(void);
+static int g_hdlPanelScan = 0;
 
-static double dStartTime =0.0;
+static int CVICALLBACK PanelScan_StartCallback(int panel, int control, int event,
+        void *callbackData, int eventData1, int eventData2);
+static int CVICALLBACK PanelScan_CancelCallback(int panel, int control, int event,
+        void *callbackData, int eventData1, int eventData2);
+static int CVICALLBACK PanelScan_CloseCallback(int panel, int event, void *callbackData,
+        int eventData1, int eventData2);
+static void PanelScan_UpdateStatus(const char *statusText, const char *slotId);
+static void PanelScan_RefreshQueueList(void);
+static void TrimWhitespace(char *text);
 
-//************************************************************************************************
-//////////////////////////////////////////////////////////////////////////////////////////////
-//
-// Function:  iGetInterfaceFromFrames
-//
-// Description: gets the Interface paths from Frames.cfg
-//
-// Parameters:
-// char *  pszIniPath         the Path of the File to read
-//
-// return value               0 if successful
-//                            -1 if file is not found
-//                            otherwise the number of failed paths
-//
-//////////////////////////////////////////////////////////////////////////////////////////////
-int iGetInterfaceFromFrames (char * pszIniPath)
+
+int CVICALLBACK UI_ScanDutSerial (int panel, int control, int event,
+        void *callbackData, int eventData1, int eventData2)
 {
-  int iRet = 0;
-  char szTemp[64] = {0};
+        char szNextSlot[64] = {0};
+        char szStatus[256] = {0};
 
-  // get Pathnames
-  if (!boIniOpen (pszIniPath)) {
-    WriteToErrorWin("iGetPathsFromFrames: %s could not be opened", pszIniPath);
-    return( -1 );
-  }
+        if (event != EVENT_COMMIT)
+        {
+                return 0;
+        }
 
+        if (g_hdlPanelScan <= 0)
+        {
+                g_hdlPanelScan = LoadPanel(0, "PANEL_SCAN.uir", PANEL);
+                if (g_hdlPanelScan <= 0)
+                {
+                        WriteToErrorWin("[PANEL_SCAN] Failed to load PANEL_SCAN.uir");
+                        return 0;
+                }
 
-	if (!boIniGetStringItem ("WIPMAMA", "STATION_ID", g_szStationId)) {
-		iRet++;
-		WriteToErrorWin("Frames.cfg does not contain STATION_ID");
-	}
-  if (!boIniGetStringItem ("EVAPROD", "TEST_PLAN_NAME", g_szTestPlan))
-  {
-  	iRet++;
-  	WriteToErrorWin("Frames.cfg does not contain TestPlan Name value at EVAPROD");
-  }
+                InstallCtrlCallback(g_hdlPanelScan, PANEL_SCAN_BTN_START, PanelScan_StartCallback, NULL);
+                InstallCtrlCallback(g_hdlPanelScan, PANEL_SCAN_BTN_CANCEL, PanelScan_CancelCallback, NULL);
+                InstallPanelCallback(g_hdlPanelScan, PanelScan_CloseCallback, NULL);
+        }
 
+        FixtureScan_GetNextSlotId(szNextSlot, sizeof(szNextSlot));
 
-  
+        SetCtrlAttribute(g_hdlPanelScan, PANEL_SCAN_TXT_SLOT, ATTR_CTRL_MODE, VAL_INDICATOR);
+        SetCtrlAttribute(g_hdlPanelScan, PANEL_SCAN_TXT_SERIAL, ATTR_CTRL_MODE, VAL_HOT);
+        SetCtrlVal(g_hdlPanelScan, PANEL_SCAN_TXT_SLOT, szNextSlot);
+        SetCtrlVal(g_hdlPanelScan, PANEL_SCAN_TXT_SERIAL, "");
 
- 
- 
-  boIniClose ();
-  return iRet;
+        Fmt(szStatus, "Expected SLOT: %s | Enter DUT SERIAL then press Test Start", szNextSlot);
+        PanelScan_UpdateStatus(szStatus, szNextSlot);
+        PanelScan_RefreshQueueList();
 
+        DisplayPanel(g_hdlPanelScan);
+
+        return 0;
 }
 
+
+static int CVICALLBACK PanelScan_StartCallback(int panel, int control, int event,
+        void *callbackData, int eventData1, int eventData2)
+{
+        char szExpectedSlot[64] = {0};
+        char szSlotInput[64] = {0};
+        char szSerial[256] = {0};
+        char szStatus[256] = {0};
+
+        if (event != EVENT_COMMIT)
+        {
+                return 0;
+        }
+
+        FixtureScan_GetNextSlotId(szExpectedSlot, sizeof(szExpectedSlot));
+
+        GetCtrlVal(panel, PANEL_SCAN_TXT_SLOT, szSlotInput);
+        GetCtrlVal(panel, PANEL_SCAN_TXT_SERIAL, szSerial);
+
+        TrimWhitespace(szSlotInput);
+        TrimWhitespace(szSerial);
+
+        if (strlen(szSlotInput) == 0 || strlen(szSerial) == 0)
+        {
+                PanelScan_UpdateStatus("SLOT and SERIAL are required.", szExpectedSlot);
+                return 0;
+        }
+
+        if (StrICmp(szExpectedSlot, szSlotInput) != 0)
+        {
+                Fmt(szStatus, "Invalid SLOT. Expected: %s", szExpectedSlot);
+                PanelScan_UpdateStatus(szStatus, szExpectedSlot);
+                SetCtrlVal(panel, PANEL_SCAN_TXT_SLOT, szExpectedSlot);
+                return 0;
+        }
+
+        if (!FixtureScan_Enqueue(szExpectedSlot, szSerial))
+        {
+                PanelScan_UpdateStatus("Failed to queue DUT. Check logs.", szExpectedSlot);
+                return 0;
+        }
+
+        FixtureSlot_SetActiveId(szExpectedSlot);
+        PanelScan_RefreshQueueList();
+
+        FixtureScan_GetNextSlotId(szExpectedSlot, sizeof(szExpectedSlot));
+        SetCtrlVal(panel, PANEL_SCAN_TXT_SLOT, szExpectedSlot);
+        SetCtrlVal(panel, PANEL_SCAN_TXT_SERIAL, "");
+
+        Fmt(szStatus, "Queued. Next expected SLOT: %s", szExpectedSlot);
+        PanelScan_UpdateStatus(szStatus, szExpectedSlot);
+
+        SetActiveCtrl(panel, PANEL_SCAN_TXT_SERIAL);
+        return 0;
+}
+
+static int CVICALLBACK PanelScan_CancelCallback(int panel, int control, int event,
+        void *callbackData, int eventData1, int eventData2)
+{
+        char szExpectedSlot[64] = {0};
+
+        if (event != EVENT_COMMIT)
+        {
+                return 0;
+        }
+
+        FixtureScan_Clear();
+        FixtureScan_GetNextSlotId(szExpectedSlot, sizeof(szExpectedSlot));
+
+        SetCtrlVal(panel, PANEL_SCAN_TXT_SLOT, szExpectedSlot);
+        SetCtrlVal(panel, PANEL_SCAN_TXT_SERIAL, "");
+        PanelScan_RefreshQueueList();
+        PanelScan_UpdateStatus("Queue cleared.", szExpectedSlot);
+
+        HidePanel(panel);
+        return 0;
+}
+
+static int CVICALLBACK PanelScan_CloseCallback(int panel, int event, void *callbackData,
+        int eventData1, int eventData2)
+{
+        if (event == EVENT_CLOSE)
+        {
+                HidePanel(panel);
+                return 1;
+        }
+
+        return 0;
+}
+
+static void PanelScan_UpdateStatus(const char *statusText, const char *slotId)
+{
+        char szStatus[256] = {0};
+
+        if (g_hdlPanelScan <= 0)
+        {
+                return;
+        }
+
+        if (slotId == NULL)
+        {
+                slotId = "n/a";
+        }
+
+        if (statusText == NULL)
+        {
+                statusText = "";
+        }
+
+        Fmt(szStatus, "%s\nExpected SLOT: %s\nQueued items: %d",
+            statusText,
+            slotId,
+            FixtureScan_Count());
+
+        SetCtrlVal(g_hdlPanelScan, PANEL_SCAN_TXT_STATUS, szStatus);
+}
+
+static void PanelScan_RefreshQueueList(void)
+{
+        int i;
+        char szEntry[512] = {0};
+        TFixtureScanRequest request = {0};
+
+        if (g_hdlPanelScan <= 0)
+        {
+                return;
+        }
+
+        ClearListCtrl(g_hdlPanelScan, PANEL_SCAN_LIST_QUEUE);
+
+        for (i = 0; i < FixtureScan_Count(); ++i)
+        {
+                if (!FixtureScan_GetByIndex(i, &request))
+                {
+                        continue;
+                }
+
+                Fmt(szEntry, "%s	%s", request.szFixtureId, request.szDutSerial);
+                InsertListItem(g_hdlPanelScan, PANEL_SCAN_LIST_QUEUE, -1, szEntry, i + 1);
+        }
+}
 
 static void TrimWhitespace(char *text)
 {
@@ -441,6 +578,12 @@ short __stdcall app_Mode3Stop (void)
 	boStopFraMesLog();
 	boStopErrorLog();
 	
+	if (g_hdlPanelScan > 0)
+	{
+		DiscardPanel(g_hdlPanelScan);
+		g_hdlPanelScan = 0;
+	}
+
 	//DiscardPanel (g_hdlToolPanel);
 	g_hdlToolPanel = 0;
 	
@@ -930,78 +1073,3 @@ short __stdcall app_GetTestRunRestart(short sSlot,short sIdx,short sRun)
 	
 	return( 0 );
 }
-
-
-int CVICALLBACK UI_ScanDutSerial (int panel, int control, int event,
-        void *callbackData, int eventData1, int eventData2)
-{
-        switch (event)
-        {
-                case EVENT_COMMIT:
-                {
-				#define SCAN_BUFFER_LEN 256
-                        int iShowIntro = 1;
-
-                        while (1)
-                        {
-                                char szFixtureId[SCAN_BUFFER_LEN] = {0};
-                                char szSerial[SCAN_BUFFER_LEN] = {0};
-                                char szStatus[256] = {0};
-
-                                FixtureScan_GetNextSlotId(szFixtureId, sizeof(szFixtureId));
-
-                                if (iShowIntro)
-                                {
-                                        MessagePopup("PANEL_SCAN", "Sequential scan mode active. Confirm the suggested SLOT from fixture config, then scan DUT SERIAL.");
-                                        iShowIntro = 0;
-                                }
-
-                                Fmt(szStatus, "Next configured SLOT: %s (#%d)", szFixtureId, FixtureScan_GetNextSlotNumber());
-                                if (PromptPopup("SLOT Scan", szStatus, szFixtureId, SCAN_BUFFER_LEN-1)== VAL_USER_CANCEL)
-                                {
-                                        return 0;
-                                }
-
-                                TrimWhitespace(szFixtureId);
-                                if (strlen(szFixtureId) == 0)
-                                {
-                                        WriteToErrorWin("[PANEL_SCAN] SLOT is empty. Queue unchanged.");
-                                        continue;
-                                }
-
-                                Fmt(szStatus, "Scan DUT SERIAL for %s", szFixtureId);
-                                if (PromptPopup("DUT SERIAL", szStatus, szSerial, SCAN_BUFFER_LEN-1)== VAL_USER_CANCEL)
-                                {
-                                        return 0;
-                                }
-
-                                TrimWhitespace(szSerial);
-                                if (strlen(szSerial) == 0)
-                                {
-                                        WriteToErrorWin("[PANEL_SCAN] DUT SERIAL is empty. Queue unchanged.");
-                                        continue;
-                                }
-
-                                FixtureSlot_SetActiveId(szFixtureId);
-
-                                if (!FixtureScan_Enqueue(szFixtureId, szSerial))
-                                {
-                                        return 0;
-                                }
-
-                                WriteToDataWin("[PANEL_SCAN] Queued DUT SERIAL %s at SLOT %s", szSerial, szFixtureId);
-                        }
-                }
-                break;
-        }
-        return 0;
-}
-
-
-
-
-
-
-
-
-
