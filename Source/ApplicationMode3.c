@@ -290,6 +290,38 @@ static void PanelScan_RefreshQueueList(void)
         }
 }
 
+int iGetInterfaceFromFrames (char * pszIniPath)
+{
+  int iRet = 0;
+  char szTemp[64] = {0};
+
+  // get Pathnames
+  if (!boIniOpen (pszIniPath)) {
+    WriteToErrorWin("iGetPathsFromFrames: %s could not be opened", pszIniPath);
+    return( -1 );
+  }
+
+
+	if (!boIniGetStringItem ("WIPMAMA", "STATION_ID", g_szStationId)) {
+		iRet++;
+		WriteToErrorWin("Frames.cfg does not contain STATION_ID");
+	}
+  if (!boIniGetStringItem ("EVAPROD", "TEST_PLAN_NAME", g_szTestPlan))
+  {
+  	iRet++;
+  	WriteToErrorWin("Frames.cfg does not contain TestPlan Name value at EVAPROD");
+  }
+
+
+  
+
+ 
+ 
+  boIniClose ();
+  return iRet;
+
+}
+
 static void TrimWhitespace(char *text)
 {
         char *start = text;

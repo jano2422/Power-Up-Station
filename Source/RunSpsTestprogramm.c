@@ -4,6 +4,7 @@
 //**********************************************************************
 #include <CviTypes.h>
 #include <Windows.h>
+#include <formatio.h>
 #include <utility.h>
 #include <ansi_c.h>
 #include <userint.h>
