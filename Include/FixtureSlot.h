@@ -13,5 +13,7 @@ int FixtureSlot_GetActivePublicCanRelay(void);
 int FixtureSlot_GetActivePrivateCanRelay(void);
 int FixtureSlot_GetActivePowerSupplyRelay(void);
 int FixtureSlot_GetPowerSupplyRelayById(const char *fixtureId);
+int FixtureSlot_GetConfiguredCount(void);
+int FixtureSlot_GetConfiguredIdByIndex(int index, char *fixtureId, int fixtureIdBufferSize);
 
 #endif
