@@ -221,3 +221,25 @@ int FixtureSlot_GetPowerSupplyRelayById(const char *fixtureId)
 
     return -1;
 }
+
+int FixtureSlot_GetConfiguredCount(void)
+{
+    return g_iFixtureSlotCount;
+}
+
+int FixtureSlot_GetConfiguredIdByIndex(int index, char *fixtureId, int fixtureIdBufferSize)
+{
+    if (fixtureId == NULL || fixtureIdBufferSize <= 1)
+    {
+        return 0;
+    }
+
+    if (index < 0 || index >= g_iFixtureSlotCount)
+    {
+        return 0;
+    }
+
+    memset(fixtureId, 0, (size_t)fixtureIdBufferSize);
+    strncpy(fixtureId, g_aFixtureSlotMap[index].szId, (size_t)fixtureIdBufferSize - 1);
+    return 1;
+}

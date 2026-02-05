@@ -946,17 +946,18 @@ int CVICALLBACK UI_ScanDutSerial (int panel, int control, int event,
                         {
                                 char szFixtureId[SCAN_BUFFER_LEN] = {0};
                                 char szSerial[SCAN_BUFFER_LEN] = {0};
-                                char szPrompt[128] = {0};
+                                char szStatus[256] = {0};
 
-                                sprintf(szFixtureId, "SLOT_%02d", FixtureScan_GetNextSlotNumber());
+                                FixtureScan_GetNextSlotId(szFixtureId, sizeof(szFixtureId));
 
                                 if (iShowIntro)
                                 {
-                                        MessagePopup("Scan DUT Serial", "Scan FixtureId, then scan the DUT serial. Slots cycle through SLOT_01 to SLOT_32.");
+                                        MessagePopup("PANEL_SCAN", "Sequential scan mode active. Confirm the suggested SLOT from fixture config, then scan DUT SERIAL.");
                                         iShowIntro = 0;
                                 }
 
-                                if (PromptPopup("FixtureId", "Scan FixtureId", szFixtureId, SCAN_BUFFER_LEN-1)== VAL_USER_CANCEL)
+                                Fmt(szStatus, "Next configured SLOT: %s (#%d)", szFixtureId, FixtureScan_GetNextSlotNumber());
+                                if (PromptPopup("SLOT Scan", szStatus, szFixtureId, SCAN_BUFFER_LEN-1)== VAL_USER_CANCEL)
                                 {
                                         return 0;
                                 }
@@ -964,12 +965,12 @@ int CVICALLBACK UI_ScanDutSerial (int panel, int control, int event,
                                 TrimWhitespace(szFixtureId);
                                 if (strlen(szFixtureId) == 0)
                                 {
-                                        WriteToErrorWin("[QUEUE] FixtureId is empty. Nothing queued.");
+                                        WriteToErrorWin("[PANEL_SCAN] SLOT is empty. Queue unchanged.");
                                         continue;
                                 }
 
-                                sprintf(szPrompt, "Scan DUT Serial for %s", szFixtureId);
-                                if (PromptPopup("DUT Serial", szPrompt, szSerial, SCAN_BUFFER_LEN-1)== VAL_USER_CANCEL)
+                                Fmt(szStatus, "Scan DUT SERIAL for %s", szFixtureId);
+                                if (PromptPopup("DUT SERIAL", szStatus, szSerial, SCAN_BUFFER_LEN-1)== VAL_USER_CANCEL)
                                 {
                                         return 0;
                                 }
@@ -977,7 +978,7 @@ int CVICALLBACK UI_ScanDutSerial (int panel, int control, int event,
                                 TrimWhitespace(szSerial);
                                 if (strlen(szSerial) == 0)
                                 {
-                                        WriteToErrorWin("[QUEUE] DUT Serial is empty. Nothing queued.");
+                                        WriteToErrorWin("[PANEL_SCAN] DUT SERIAL is empty. Queue unchanged.");
                                         continue;
                                 }
 
@@ -988,7 +989,7 @@ int CVICALLBACK UI_ScanDutSerial (int panel, int control, int event,
                                         return 0;
                                 }
 
-                                WriteToDataWin("[QUEUE] Next DUT %s on %s", szSerial, szFixtureId);
+                                WriteToDataWin("[PANEL_SCAN] Queued DUT SERIAL %s at SLOT %s", szSerial, szFixtureId);
                         }
                 }
                 break;

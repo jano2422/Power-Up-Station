@@ -68,6 +68,7 @@ extern int FixtureScan_Enqueue(const char *fixtureId, const char *dutSerial);
 extern int FixtureScan_Dequeue(TFixtureScanRequest *request);
 extern int FixtureScan_Count(void);
 extern int FixtureScan_GetNextSlotNumber(void);
+extern int FixtureScan_GetNextSlotId(char *slotId, int slotIdBufferSize);
 
 extern int g_iPublicCanRelay;
 extern int g_iPrivateCanRelay;

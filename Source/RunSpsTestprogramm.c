@@ -56,7 +56,7 @@ char g_szScanTmpSn[OpcStringLength];
 static TFixtureScanRequest g_aFixtureScanQueue[MAX_FIXTURE_SLOT];
 static int g_iFixtureScanHead  = 0;
 static int g_iFixtureScanCount = 0;
-static int g_iNextFixtureIndex = 1;
+static int g_iNextFixtureConfigIndex = 0;
 
 //////////////////////////////////////////////////////////////////////////////////////////////
 // Batch power-up (run once per queue batch)
@@ -118,16 +118,50 @@ static int FixtureScan_GetTailIndex(void)
 
 static void FixtureScan_AdvanceNextSlot(void)
 {
-    g_iNextFixtureIndex++;
-    if (g_iNextFixtureIndex > MAX_FIXTURE_SLOT)
+    int iConfiguredCount = FixtureSlot_GetConfiguredCount();
+
+    if (iConfiguredCount <= 0)
     {
-        g_iNextFixtureIndex = 1;
+        g_iNextFixtureConfigIndex = 0;
+        return;
     }
+
+    g_iNextFixtureConfigIndex = (g_iNextFixtureConfigIndex + 1) % iConfiguredCount;
 }
 
 int FixtureScan_GetNextSlotNumber(void)
 {
-    return g_iNextFixtureIndex;
+    char szFixtureId[FIXTURE_SLOT_MAX_ID_LEN] = {0};
+    int iSlotNumber = 0;
+
+    if (FixtureSlot_GetConfiguredIdByIndex(g_iNextFixtureConfigIndex,
+                                           szFixtureId,
+                                           sizeof(szFixtureId))
+        && sscanf(szFixtureId, "SLOT_%d", &iSlotNumber) == 1)
+    {
+        return iSlotNumber;
+    }
+
+    return g_iNextFixtureConfigIndex + 1;
+}
+
+int FixtureScan_GetNextSlotId(char *slotId, int slotIdBufferSize)
+{
+    if (slotId == NULL || slotIdBufferSize <= 1)
+    {
+        return 0;
+    }
+
+    if (FixtureSlot_GetConfiguredIdByIndex(g_iNextFixtureConfigIndex,
+                                           slotId,
+                                           slotIdBufferSize))
+    {
+        return 1;
+    }
+
+    memset(slotId, 0, (size_t)slotIdBufferSize);
+    Fmt(slotId, "SLOT_%02d", g_iNextFixtureConfigIndex + 1);
+    return 1;
 }
 
 int FixtureScan_Enqueue(const char *fixtureId, const char *dutSerial)
@@ -531,7 +565,7 @@ short sRunSps(void)
 
             WriteToDataWin("[SYSTEM] Validating TMP SN: %s", g_szScanTmpSn);
 
-            // STEP 1 — Validate Unit for this station
+            // STEP 1 Â— Validate Unit for this station
             if (!boWpmCheckUnitValid(&g_UnitInfo, &cUnitLocation))
             {
                 wpm_ShowError();
@@ -543,7 +577,7 @@ short sRunSps(void)
             }
             WriteToDataWin("End of boWpmCheckUnitValid  %.2f s", (Timer() - dHandlingTime));
 
-            // STEP 2 — Switch back MES Unit ID
+            // STEP 2 Â— Switch back MES Unit ID
             WriteToDataWin("Start of boWpmSwitchBackUnitId %.2f s", (Timer() - dHandlingTime));
 
             if (!boWpmSwitchBackUnitId(&g_UnitInfo, True))
@@ -555,7 +589,7 @@ short sRunSps(void)
 
             WriteToDataWin("End of boWpmSwitchBackUnitId %.2f s", (Timer() - dHandlingTime));
 
-            // STEP 3 — Check Software Version & Customer Type (only if material changed)
+            // STEP 3 Â— Check Software Version & Customer Type (only if material changed)
             if (strcmp(g_szUnitMaterialLast, g_UnitInfo.szUnitMaterial) != 0)
             {
                 MultiDutSelectedInfo info = {0};
