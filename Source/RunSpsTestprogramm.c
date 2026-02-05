@@ -227,6 +227,32 @@ int FixtureScan_Count(void)
     return g_iFixtureScanCount;
 }
 
+void FixtureScan_Clear(void)
+{
+    memset(g_aFixtureScanQueue, 0, sizeof(g_aFixtureScanQueue));
+    g_iFixtureScanHead = 0;
+    g_iFixtureScanCount = 0;
+    g_iNextFixtureConfigIndex = 0;
+    g_bHasPendingRequest = 0;
+    memset(&g_tPendingRequest, 0, sizeof(g_tPendingRequest));
+
+    WriteToDataWin("[QUEUE] Cleared queued fixture/DUT entries.");
+}
+
+int FixtureScan_GetByIndex(int index, TFixtureScanRequest *request)
+{
+    int iQueueIndex;
+
+    if (request == NULL || index < 0 || index >= g_iFixtureScanCount)
+    {
+        return 0;
+    }
+
+    iQueueIndex = (g_iFixtureScanHead + index) % MAX_FIXTURE_SLOT;
+    memcpy(request, &g_aFixtureScanQueue[iQueueIndex], sizeof(TFixtureScanRequest));
+    return 1;
+}
+
 //////////////////////////////////////////////////////////////////////////////////////////////
 // Internal helper: apply a dequeued request into the currently-active context
 
