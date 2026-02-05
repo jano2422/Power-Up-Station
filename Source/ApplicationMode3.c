@@ -88,7 +88,12 @@ char g_szStationId[20];
 #define CTRL_SCAN_DUT_SERIAL 2001
 int CVICALLBACK UI_ScanDutSerial (int panel, int control, int event,
         void *callbackData, int eventData1, int eventData2);
-
+		
+extern char g_szErrorFilePath [500];
+extern Boolean g_boTesterOk;
+extern short __stdcall con_Exit(void);
+extern 		int DefineMeasArray(void);
+static double dStartTime =0.0;
 static int g_hdlPanelScan = 0;
 
 static int CVICALLBACK PanelScan_StartCallback(int panel, int control, int event,
