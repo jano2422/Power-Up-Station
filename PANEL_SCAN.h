@@ -19,7 +19,7 @@
 #define  PANEL_SCAN_TXT_SERIAL            3
 #define  PANEL_SCAN_BTN_START             4
 #define  PANEL_SCAN_BTN_CANCEL            5
-#define  PANEL_SCAN_LIST_QUEUE            6
+#define  PANEL_SCAN_TABLE_QUEUE           6
 #define  PANEL_SCAN_TXT_STATUS            7
 
 
