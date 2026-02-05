@@ -320,7 +320,7 @@ static void PanelScan_UpdateStatus(const char *statusText, const char *slotId)
 static void PanelScan_RefreshQueueList(void)
 {
         int i;
-        char szEntry[512] = {0};
+        int iRowCount = 0;
         TFixtureScanRequest request = {0};
 
         if (g_hdlPanelScan <= 0)
@@ -328,7 +328,16 @@ static void PanelScan_RefreshQueueList(void)
                 return;
         }
 
-        ClearListCtrl(g_hdlPanelScan, PANEL_SCAN_LIST_QUEUE);
+        GetNumTableRows(g_hdlPanelScan, PANEL_SCAN_TABLE_QUEUE, &iRowCount);
+        if (iRowCount > 0)
+        {
+                DeleteTableRows(g_hdlPanelScan, PANEL_SCAN_TABLE_QUEUE, 1, iRowCount);
+        }
+
+        if (FixtureScan_Count() > 0)
+        {
+                InsertTableRows(g_hdlPanelScan, PANEL_SCAN_TABLE_QUEUE, 1, FixtureScan_Count(), VAL_CELL_STRING);
+        }
 
         for (i = 0; i < FixtureScan_Count(); ++i)
         {
@@ -337,8 +346,8 @@ static void PanelScan_RefreshQueueList(void)
                         continue;
                 }
 
-                Fmt(szEntry, "%s	%s", request.szFixtureId, request.szDutSerial);
-                InsertListItem(g_hdlPanelScan, PANEL_SCAN_LIST_QUEUE, -1, szEntry, i + 1);
+                SetTableCellVal(g_hdlPanelScan, PANEL_SCAN_TABLE_QUEUE, MakePoint(1, i + 1), request.szFixtureId);
+                SetTableCellVal(g_hdlPanelScan, PANEL_SCAN_TABLE_QUEUE, MakePoint(2, i + 1), request.szDutSerial);
         }
 }
 
