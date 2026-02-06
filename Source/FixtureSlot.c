@@ -19,6 +19,7 @@ typedef struct {
     int iPublicRelay;
     int iPrivateRelay;
     int iPowerSupplyRelay;
+    int iEnabled;
 } FixtureSlotEntry;
 
 static FixtureSlotEntry g_aFixtureSlotMap[FIXTURE_SLOT_MAX_ENTRIES];
@@ -39,7 +40,7 @@ static void FixtureSlot_ResetMap(void)
     memset(g_aFixtureSlotMap, 0, sizeof(g_aFixtureSlotMap));
 }
 
-static void FixtureSlot_ApplyEntry(const char *fixtureId, int publicRelay, int privateRelay, int powerSupplyRelay)
+static void FixtureSlot_ApplyEntry(const char *fixtureId, int publicRelay, int privateRelay, int powerSupplyRelay, int enabled)
 {
     if (g_iFixtureSlotCount >= FIXTURE_SLOT_MAX_ENTRIES)
     {
@@ -51,6 +52,7 @@ static void FixtureSlot_ApplyEntry(const char *fixtureId, int publicRelay, int p
     g_aFixtureSlotMap[g_iFixtureSlotCount].iPublicRelay = publicRelay;
     g_aFixtureSlotMap[g_iFixtureSlotCount].iPrivateRelay = privateRelay;
     g_aFixtureSlotMap[g_iFixtureSlotCount].iPowerSupplyRelay = powerSupplyRelay;
+    g_aFixtureSlotMap[g_iFixtureSlotCount].iEnabled = enabled ? 1 : 0;
     g_iFixtureSlotCount++;
 }
 
@@ -88,6 +90,7 @@ static void FixtureSlot_ParseLine(const char *line)
     int publicRelay = -1;
     int privateRelay = -1;
     int powerSupplyRelay = -1;
+    int enabled = 1;
 	int iParsedCount = 0;
 	
     strncpy(szBuffer, line, sizeof(szBuffer) - 1);
@@ -98,7 +101,7 @@ static void FixtureSlot_ParseLine(const char *line)
     }
 
     
-        iParsedCount = sscanf(szBuffer, "%63[^=]=%d,%d,%d", szId, &publicRelay, &privateRelay, &powerSupplyRelay);
+        iParsedCount = sscanf(szBuffer, "%63[^=]=%d,%d,%d,%d", szId, &publicRelay, &privateRelay, &powerSupplyRelay, &enabled);
         if (iParsedCount == 3)
         {
             powerSupplyRelay = g_iDefaultPowerSupplyRelay;
@@ -111,7 +114,7 @@ static void FixtureSlot_ParseLine(const char *line)
             {
                 return;
             }
-            FixtureSlot_ApplyEntry(szId, publicRelay, privateRelay, powerSupplyRelay);
+            FixtureSlot_ApplyEntry(szId, publicRelay, privateRelay, powerSupplyRelay, enabled);
         
     }
 }
@@ -157,9 +160,18 @@ static void FixtureSlot_UpdateActiveRelays(const char *fixtureId)
     {
         if (StrICmp(fixtureId, g_aFixtureSlotMap[iIndex].szId) == 0)
         {
-            g_iActivePublicRelay = g_aFixtureSlotMap[iIndex].iPublicRelay;
-            g_iActivePrivateRelay = g_aFixtureSlotMap[iIndex].iPrivateRelay;
-            g_iActivePowerSupplyRelay = g_aFixtureSlotMap[iIndex].iPowerSupplyRelay;
+            if (g_aFixtureSlotMap[iIndex].iEnabled)
+            {
+                g_iActivePublicRelay = g_aFixtureSlotMap[iIndex].iPublicRelay;
+                g_iActivePrivateRelay = g_aFixtureSlotMap[iIndex].iPrivateRelay;
+                g_iActivePowerSupplyRelay = g_aFixtureSlotMap[iIndex].iPowerSupplyRelay;
+            }
+            else
+            {
+                g_iActivePublicRelay = -1;
+                g_iActivePrivateRelay = -1;
+                g_iActivePowerSupplyRelay = -1;
+            }
             return;
         }
     }
@@ -220,6 +232,68 @@ int FixtureSlot_GetPowerSupplyRelayById(const char *fixtureId)
     }
 
     return -1;
+}
+
+
+
+int FixtureSlot_IsEnabledById(const char *fixtureId)
+{
+    int i;
+
+    if (fixtureId == NULL || fixtureId[0] == '\0')
+        return 0;
+
+    for (i = 0; i < g_iFixtureSlotCount; i++)
+    {
+        if (StrICmp(fixtureId, g_aFixtureSlotMap[i].szId) == 0)
+            return g_aFixtureSlotMap[i].iEnabled ? 1 : 0;
+    }
+
+    return 0;
+}
+
+int FixtureSlot_SetEnabledById(const char *fixtureId, int enabled)
+{
+    FILE *pFile = NULL;
+    int i;
+
+    if (fixtureId == NULL || fixtureId[0] == '\0')
+        return 0;
+
+    for (i = 0; i < g_iFixtureSlotCount; i++)
+    {
+        if (StrICmp(fixtureId, g_aFixtureSlotMap[i].szId) == 0)
+        {
+            g_aFixtureSlotMap[i].iEnabled = enabled ? 1 : 0;
+
+            pFile = fopen("FixtureSlots.cfg", "w");
+            if (pFile == NULL)
+            {
+                WriteToErrorWin("[FixtureSlot] Could not write FixtureSlots.cfg");
+                return 0;
+            }
+
+            fprintf(pFile, "# Fixture slot configuration\n");
+            fprintf(pFile, "# Format: <FixtureSlotId>=<PublicCanRelay>,<PrivateCanRelay>,<PowerSupplyRelay>,<Enabled>\n");
+            fprintf(pFile, "# Enabled: 1 = enabled, 0 = disabled\n\n");
+
+            for (i = 0; i < g_iFixtureSlotCount; i++)
+            {
+                fprintf(pFile, "%s=%d,%d,%d,%d\n",
+                        g_aFixtureSlotMap[i].szId,
+                        g_aFixtureSlotMap[i].iPublicRelay,
+                        g_aFixtureSlotMap[i].iPrivateRelay,
+                        g_aFixtureSlotMap[i].iPowerSupplyRelay,
+                        g_aFixtureSlotMap[i].iEnabled ? 1 : 0);
+            }
+
+            fclose(pFile);
+            FixtureSlot_UpdateActiveRelays(g_szActiveFixtureId);
+            return 1;
+        }
+    }
+
+    return 0;
 }
 
 int FixtureSlot_GetConfiguredCount(void)
