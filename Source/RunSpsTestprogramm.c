@@ -350,6 +350,52 @@ static void ApplyQueuedRequest(const TFixtureScanRequest *pRequest)
     dHandlingTime = Timer();
 }
 
+static void BatchPowerMarkQueuedSlotsLed(const char *note)
+{
+    int i;
+    int idx;
+
+    if (g_bHasPendingRequest)
+    {
+        MultiDutUi_SetSlotState(g_tPendingRequest.szFixtureId,
+                                MULTI_DUT_STATE_BATCH_POWER,
+                                g_tPendingRequest.szDutSerial,
+                                note);
+    }
+
+    for (i = 0; i < g_iFixtureScanCount; i++)
+    {
+        idx = (g_iFixtureScanHead + i) % MAX_FIXTURE_SLOT;
+        MultiDutUi_SetSlotState(g_aFixtureScanQueue[idx].szFixtureId,
+                                MULTI_DUT_STATE_BATCH_POWER,
+                                g_aFixtureScanQueue[idx].szDutSerial,
+                                note);
+    }
+}
+
+static void BatchPowerRestoreQueuedSlotsLed(void)
+{
+    int i;
+    int idx;
+
+    if (g_bHasPendingRequest)
+    {
+        MultiDutUi_SetSlotState(g_tPendingRequest.szFixtureId,
+                                MULTI_DUT_STATE_QUEUED,
+                                g_tPendingRequest.szDutSerial,
+                                "Queued for next test run");
+    }
+
+    for (i = 0; i < g_iFixtureScanCount; i++)
+    {
+        idx = (g_iFixtureScanHead + i) % MAX_FIXTURE_SLOT;
+        MultiDutUi_SetSlotState(g_aFixtureScanQueue[idx].szFixtureId,
+                                MULTI_DUT_STATE_QUEUED,
+                                g_aFixtureScanQueue[idx].szDutSerial,
+                                "Queued for next test run");
+    }
+}
+
 static void BatchPowerUp_ExecuteForQueuedSlots(void)
 {
     int i;
@@ -357,6 +403,7 @@ static void BatchPowerUp_ExecuteForQueuedSlots(void)
     int relay;
 
     WriteToDataWin("[BATCH] Turning ON power supplies...");
+    BatchPowerMarkQueuedSlotsLed("Batch power-up in progress");
 
     // Turn ON supplies (set voltage/current + output ON)
     if (!boHpPsSetOutOn(&g_HpSupplyPrimary, PRIMARY_VOLT, PRIMARY_CURR))
@@ -455,6 +502,7 @@ static void BatchPowerDown_ExecuteForQueuedSlots(void)
         }
     }
 
+    BatchPowerRestoreQueuedSlotsLed();
     WriteToDataWin("[BATCH] PSU OFF + queued relays OFF done.");
 }
 
