@@ -133,6 +133,8 @@ static int FixtureScan_GetTailIndex(void)
 static void FixtureScan_AdvanceNextSlot(void)
 {
     int iConfiguredCount = FixtureSlot_GetConfiguredCount();
+    int iStartIndex;
+    char szFixtureId[FIXTURE_SLOT_MAX_ID_LEN] = {0};
 
     if (iConfiguredCount <= 0)
     {
@@ -140,7 +142,21 @@ static void FixtureScan_AdvanceNextSlot(void)
         return;
     }
 
-    g_iNextFixtureConfigIndex = (g_iNextFixtureConfigIndex + 1) % iConfiguredCount;
+    iStartIndex = g_iNextFixtureConfigIndex;
+
+    do
+    {
+        g_iNextFixtureConfigIndex = (g_iNextFixtureConfigIndex + 1) % iConfiguredCount;
+
+        if (FixtureSlot_GetConfiguredIdByIndex(g_iNextFixtureConfigIndex,
+                                               szFixtureId,
+                                               sizeof(szFixtureId))
+            && FixtureSlot_IsEnabledById(szFixtureId))
+        {
+            return;
+        }
+    }
+    while (g_iNextFixtureConfigIndex != iStartIndex);
 }
 
 int FixtureScan_GetNextSlotNumber(void)
@@ -161,9 +177,31 @@ int FixtureScan_GetNextSlotNumber(void)
 
 int FixtureScan_GetNextSlotId(char *slotId, int slotIdBufferSize)
 {
+    int iConfiguredCount;
+    int iOffset;
+    int iIndex;
+    char szCandidate[FIXTURE_SLOT_MAX_ID_LEN] = {0};
+
     if (slotId == NULL || slotIdBufferSize <= 1)
     {
         return 0;
+    }
+
+    iConfiguredCount = FixtureSlot_GetConfiguredCount();
+
+    for (iOffset = 0; iOffset < iConfiguredCount; iOffset++)
+    {
+        iIndex = (g_iNextFixtureConfigIndex + iOffset) % iConfiguredCount;
+        if (FixtureSlot_GetConfiguredIdByIndex(iIndex,
+                                               szCandidate,
+                                               sizeof(szCandidate))
+            && FixtureSlot_IsEnabledById(szCandidate))
+        {
+            memset(slotId, 0, (size_t)slotIdBufferSize);
+            strncpy(slotId, szCandidate, (size_t)slotIdBufferSize - 1);
+            g_iNextFixtureConfigIndex = iIndex;
+            return 1;
+        }
     }
 
     if (FixtureSlot_GetConfiguredIdByIndex(g_iNextFixtureConfigIndex,
@@ -190,6 +228,12 @@ int FixtureScan_Enqueue(const char *fixtureId, const char *dutSerial)
     if (strlen(fixtureId) == 0 || strlen(dutSerial) == 0)
     {
         WriteToErrorWin("[QUEUE] Missing FixtureId or DUT Serial");
+        return 0;
+    }
+
+    if (!FixtureSlot_IsEnabledById(fixtureId))
+    {
+        WriteToErrorWin("[QUEUE] %s is disabled and cannot be queued.", fixtureId);
         return 0;
     }
 

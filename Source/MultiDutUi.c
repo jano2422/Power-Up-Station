@@ -7,6 +7,7 @@
 #include "ApplicationTools.h"
 #include "MultiDutUi.h"
 #include "PnlTools.h"
+#include "FixtureSlot.h"
 
 #define MULTI_DUT_SLOT_COUNT 32
 #define MULTI_DUT_RESULT_COLUMNS 9
@@ -92,6 +93,7 @@ static void MultiDutUi_UpdateLedColor(int slotIndex);
 static void MultiDutUi_UpdateResultTable(void);
 static void MultiDutUi_UpdateSelectedInfoTable(void);
 static int CVICALLBACK SlotLedCallback(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
+static int MultiDutUi_ToggleSlotEnabled(int slotIndex);
 static int MultiDutUi_SlotIdToIndex(const char *slotId);
 static const char *MultiDutUi_StateText(MultiDutState state);
 static void MultiDutUi_UpdateTimestamp(SlotUiState *slotData);
@@ -653,7 +655,7 @@ static void MultiDutUi_UpdateResultTable(void)
     /* Ensure the correct number of rows (at least 1 placeholder row) */
     MultiDutUi_ResizeResultTable(pSlot->resultCount > 0 ? pSlot->resultCount : 1);
 
-    /* IMPORTANT: do NOT clear all rows anymore – that was causing flicker */
+    /* IMPORTANT: do NOT clear all rows anymore Â– that was causing flicker */
 
     if (pSlot->resultCount <= 0)
     {
@@ -744,13 +746,19 @@ static int CVICALLBACK SlotLedCallback(int panel, int control, int event, void *
 {
     int slotIndex;
 
-    if (event != EVENT_COMMIT)
+    slotIndex = (int)(intptr_t)callbackData;
+    if (slotIndex < 0 || slotIndex >= MULTI_DUT_SLOT_COUNT)
     {
         return 0;
     }
 
-    slotIndex = (int)(intptr_t)callbackData;
-    if (slotIndex < 0 || slotIndex >= MULTI_DUT_SLOT_COUNT)
+    if (event == EVENT_RIGHT_CLICK)
+    {
+        MultiDutUi_ToggleSlotEnabled(slotIndex);
+        return 0;
+    }
+
+    if (event != EVENT_COMMIT)
     {
         return 0;
     }
@@ -758,6 +766,64 @@ static int CVICALLBACK SlotLedCallback(int panel, int control, int event, void *
     g_iSelectedSlot = slotIndex;
     MultiDutUi_UpdateResultTable();
     MultiDutUi_UpdateSelectedInfoTable();
+
+    return 0;
+}
+
+static int MultiDutUi_ToggleSlotEnabled(int slotIndex)
+{
+    char szSlotId[32] = {0};
+    char szPassword[64] = {0};
+    int iCurrentEnabled;
+    int iNewEnabled;
+
+    sprintf(szSlotId, "SLOT_%02d", slotIndex + 1);
+
+    iCurrentEnabled = FixtureSlot_IsEnabledById(szSlotId);
+    iNewEnabled = iCurrentEnabled ? 0 : 1;
+
+    if (iNewEnabled)
+    {
+        if (!ConfirmPopup("Slot Access", "Enable this slot?"))
+        {
+            return 0;
+        }
+    }
+    else
+    {
+        if (!ConfirmPopup("Slot Access", "Disable this slot?"))
+        {
+            return 0;
+        }
+    }
+
+    if (!PromptPopup("Slot Access", "Enter password to enable/disable slot", szPassword, sizeof(szPassword) - 1))
+    {
+        return 0;
+    }
+
+    if (strcmp(szPassword, "ADASSCR2026") != 0)
+    {
+        MessagePopup("Slot Access", "Invalid password");
+        return -1;
+    }
+
+    if (!FixtureSlot_SetEnabledById(szSlotId, iNewEnabled))
+    {
+        MessagePopup("Slot Access", "Failed to update slot status");
+        return -1;
+    }
+
+    if (iNewEnabled)
+    {
+        WriteToDataWin("[FixtureSlot] %s enabled", szSlotId);
+        MessagePopup("Slot Access", "Slot enabled");
+    }
+    else
+    {
+        WriteToDataWin("[FixtureSlot] %s disabled", szSlotId);
+        MessagePopup("Slot Access", "Slot disabled");
+    }
 
     return 0;
 }
