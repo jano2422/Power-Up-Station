@@ -95,6 +95,8 @@ extern short __stdcall con_Exit(void);
 extern 		int DefineMeasArray(void);
 static double dStartTime =0.0;
 static int g_hdlPanelScan = 0;
+int g_boStartAuthorized = 0;   // 0 = wait, 1 = allow RunSps to release DUT
+
 
 static int CVICALLBACK PanelScan_StartCallback(int panel, int control, int event,
         void *callbackData, int eventData1, int eventData2);
@@ -170,24 +172,9 @@ static int CVICALLBACK PanelScan_StartCallback(int panel, int control, int event
                 return 0;
         }
 
-        boQueued = PanelScan_QueueCurrentInput(panel, szStatus, sizeof(szStatus));
-        if (!boQueued)
-        {
-                FixtureScan_GetNextSlotId(szExpectedSlot, sizeof(szExpectedSlot));
-                PanelScan_UpdateStatus(szStatus, szExpectedSlot);
-                return 0;
-        }
-        PanelScan_RefreshQueueList();
-
-        FixtureScan_GetNextSlotId(szExpectedSlot, sizeof(szExpectedSlot));
-        SetCtrlVal(panel, PANEL_SCAN_TXT_SLOT, "");
-        SetCtrlVal(panel, PANEL_SCAN_TXT_SERIAL, "");
-
-        Fmt(szStatus, "Queued SLOT successfully. Next expected SLOT: %s", szExpectedSlot);
-        PanelScan_UpdateStatus(szStatus, szExpectedSlot);
-
-        PanelScan_SetInputState(panel, True, False);
-        SetActiveCtrl(panel, PANEL_SCAN_TXT_SLOT);
+   
+		g_boStartAuthorized = 1;
+        
         return 0;
 }
 
@@ -787,11 +774,15 @@ short __stdcall app_GetUnit(char *szUnitIdType,char *szUnitId)
 									tScanningQuality.iRead, tScanningQuality.iPass, tScanningQuality.iFail);
 	SetCtrlAttribute (g_hdlToolPanel, PNL_TOOLS_LB_SHOW_DATA, ATTR_LABEL_TEXT, szLine);
 	
-	//
+
+
 	sStatus = sRunSps();
-	if( sStatus <= 0 ) {
-		return( 0 );
-	}
+
+	if (sStatus <= 0)
+    return 0;
+
+
+
 	strcpy(szUnitIdType, g_UnitInfo.szUnitIdType);
 	strcpy(szUnitId, g_UnitInfo.szUnitId);
 	

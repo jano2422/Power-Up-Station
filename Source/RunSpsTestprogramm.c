@@ -47,6 +47,8 @@ extern char g_szVersion[32];
 
 EStatus g_eRunStatus = 0;
 Boolean g_boTesterOk = False;
+extern int g_boStartAuthorized;
+
 
 TScanningQuality tScanningQuality = {0, 0, 0};
 
@@ -500,6 +502,10 @@ short sRunSps(void)
         {
             TFixtureScanRequest tRequest;
 
+			  // Don't run anything until Start is pressed
+    		if (!g_boStartAuthorized)
+        	break;
+		
             if (FixtureScan_Dequeue(&tRequest))
             {
                 // If this is the FIRST DUT of a newly started queue batch, run a single
@@ -863,6 +869,7 @@ short sRunSps(void)
             // Next time a new batch starts (queue refilled), power-up will run once again.
             if (FixtureScan_Count() == 0 && !g_bHasPendingRequest)
             {
+				g_boStartAuthorized = 0;
                 g_bBatchPowerUpDone = 0;
             }
 
