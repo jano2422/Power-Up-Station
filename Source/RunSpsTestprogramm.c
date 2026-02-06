@@ -47,7 +47,18 @@ extern char g_szVersion[32];
 
 EStatus g_eRunStatus = 0;
 Boolean g_boTesterOk = False;
-extern int g_boStartAuthorized;
+static int g_boStartAuthorized = 0;
+
+void RunSps_SetStartAuthorized(int boAuthorized)
+{
+    g_boStartAuthorized = (boAuthorized != 0) ? 1 : 0;
+}
+
+int RunSps_IsStartAuthorized(void)
+{
+    return g_boStartAuthorized;
+}
+
 
 
 TScanningQuality tScanningQuality = {0, 0, 0};
@@ -869,7 +880,7 @@ short sRunSps(void)
             // Next time a new batch starts (queue refilled), power-up will run once again.
             if (FixtureScan_Count() == 0 && !g_bHasPendingRequest)
             {
-				g_boStartAuthorized = 0;
+				RunSps_SetStartAuthorized(0);
                 g_bBatchPowerUpDone = 0;
             }
 

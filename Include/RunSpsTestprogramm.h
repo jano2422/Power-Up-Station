@@ -71,6 +71,8 @@ extern void FixtureScan_Clear(void);
 extern int FixtureScan_GetByIndex(int index, TFixtureScanRequest *request);
 extern int FixtureScan_GetNextSlotNumber(void);
 extern int FixtureScan_GetNextSlotId(char *slotId, int slotIdBufferSize);
+extern void RunSps_SetStartAuthorized(int boAuthorized);
+extern int RunSps_IsStartAuthorized(void);
 
 extern int g_iPublicCanRelay;
 extern int g_iPrivateCanRelay;

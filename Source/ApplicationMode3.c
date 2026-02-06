@@ -95,7 +95,6 @@ extern short __stdcall con_Exit(void);
 extern 		int DefineMeasArray(void);
 static double dStartTime =0.0;
 static int g_hdlPanelScan = 0;
-int g_boStartAuthorized = 0;   // 0 = wait, 1 = allow RunSps to release DUT
 
 
 static int CVICALLBACK PanelScan_StartCallback(int panel, int control, int event,
@@ -173,7 +172,7 @@ static int CVICALLBACK PanelScan_StartCallback(int panel, int control, int event
         }
 
    
-		g_boStartAuthorized = 1;
+		RunSps_SetStartAuthorized(1);
         
         return 0;
 }
