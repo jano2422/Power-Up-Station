@@ -98,14 +98,20 @@ static int g_hdlPanelScan = 0;
 
 static int CVICALLBACK PanelScan_StartCallback(int panel, int control, int event,
         void *callbackData, int eventData1, int eventData2);
+static int CVICALLBACK PanelScan_SlotCallback(int panel, int control, int event,
+        void *callbackData, int eventData1, int eventData2);
+static int CVICALLBACK PanelScan_SerialCallback(int panel, int control, int event,
+        void *callbackData, int eventData1, int eventData2);
 static int CVICALLBACK PanelScan_CancelCallback(int panel, int control, int event,
         void *callbackData, int eventData1, int eventData2);
 static int CVICALLBACK PanelScan_CloseCallback(int panel, int event, void *callbackData,
         int eventData1, int eventData2);
 static void PanelScan_UpdateStatus(const char *statusText, const char *slotId);
 static void PanelScan_RefreshQueueList(void);
+static void PanelScan_SetInputState(int panel, int boSlotEnabled, int boSerialEnabled);
+static int PanelScan_ValidateSlotInput(int panel, char *slotOut, int slotOutSize, char *statusText, int statusTextSize);
+static int PanelScan_QueueCurrentInput(int panel, char *statusText, int statusTextSize);
 static void TrimWhitespace(char *text);
-static int PanelScan_EnqueueSlots(const char *slotInput, const char *serial, char *statusText, int statusTextSize);
 
 
 int CVICALLBACK UI_ScanDutSerial (int panel, int control, int event,
@@ -130,19 +136,21 @@ int CVICALLBACK UI_ScanDutSerial (int panel, int control, int event,
 
                 InstallCtrlCallback(g_hdlPanelScan, PANEL_SCAN_BTN_START, PanelScan_StartCallback, NULL);
                 InstallCtrlCallback(g_hdlPanelScan, PANEL_SCAN_BTN_CANCEL, PanelScan_CancelCallback, NULL);
+                InstallCtrlCallback(g_hdlPanelScan, PANEL_SCAN_TXT_SLOT, PanelScan_SlotCallback, NULL);
+                InstallCtrlCallback(g_hdlPanelScan, PANEL_SCAN_TXT_SERIAL, PanelScan_SerialCallback, NULL);
                 InstallPanelCallback(g_hdlPanelScan, PanelScan_CloseCallback, NULL);
         }
 
         FixtureScan_GetNextSlotId(szNextSlot, sizeof(szNextSlot));
 
-        SetCtrlAttribute(g_hdlPanelScan, PANEL_SCAN_TXT_SLOT, ATTR_CTRL_MODE, VAL_HOT);
-        SetCtrlAttribute(g_hdlPanelScan, PANEL_SCAN_TXT_SERIAL, ATTR_CTRL_MODE, VAL_HOT);
+        PanelScan_SetInputState(g_hdlPanelScan, True, False);
         SetCtrlVal(g_hdlPanelScan, PANEL_SCAN_TXT_SLOT, "");
         SetCtrlVal(g_hdlPanelScan, PANEL_SCAN_TXT_SERIAL, "");
 
-        Fmt(szStatus, "Expected SLOT: %s | Enter SLOT list + DUT SERIAL then press Test Start", szNextSlot);
+        Fmt(szStatus, "Expected SLOT: %s | Scan SLOT, press Enter, then scan DUT SERIAL and press Enter", szNextSlot);
         PanelScan_UpdateStatus(szStatus, szNextSlot);
         PanelScan_RefreshQueueList();
+        SetActiveCtrl(g_hdlPanelScan, PANEL_SCAN_TXT_SLOT);
 
         DisplayPanel(g_hdlPanelScan);
 
@@ -154,31 +162,16 @@ static int CVICALLBACK PanelScan_StartCallback(int panel, int control, int event
         void *callbackData, int eventData1, int eventData2)
 {
         char szExpectedSlot[64] = {0};
-        char szSlotInput[256] = {0};
-        char szSerial[256] = {0};
         char szStatus[256] = {0};
-        int iQueuedCount = 0;
+        int boQueued = 0;
 
         if (event != EVENT_COMMIT)
         {
                 return 0;
         }
 
-        GetCtrlVal(panel, PANEL_SCAN_TXT_SLOT, szSlotInput);
-        GetCtrlVal(panel, PANEL_SCAN_TXT_SERIAL, szSerial);
-
-        TrimWhitespace(szSlotInput);
-        TrimWhitespace(szSerial);
-
-        if (strlen(szSlotInput) == 0 || strlen(szSerial) == 0)
-        {
-                FixtureScan_GetNextSlotId(szExpectedSlot, sizeof(szExpectedSlot));
-                PanelScan_UpdateStatus("SLOT and SERIAL are required.", szExpectedSlot);
-                return 0;
-        }
-
-        iQueuedCount = PanelScan_EnqueueSlots(szSlotInput, szSerial, szStatus, sizeof(szStatus));
-        if (iQueuedCount <= 0)
+        boQueued = PanelScan_QueueCurrentInput(panel, szStatus, sizeof(szStatus));
+        if (!boQueued)
         {
                 FixtureScan_GetNextSlotId(szExpectedSlot, sizeof(szExpectedSlot));
                 PanelScan_UpdateStatus(szStatus, szExpectedSlot);
@@ -190,70 +183,151 @@ static int CVICALLBACK PanelScan_StartCallback(int panel, int control, int event
         SetCtrlVal(panel, PANEL_SCAN_TXT_SLOT, "");
         SetCtrlVal(panel, PANEL_SCAN_TXT_SERIAL, "");
 
-        Fmt(szStatus, "Queued %i slot(s). Next expected SLOT: %s", iQueuedCount, szExpectedSlot);
+        Fmt(szStatus, "Queued SLOT successfully. Next expected SLOT: %s", szExpectedSlot);
         PanelScan_UpdateStatus(szStatus, szExpectedSlot);
 
-        SetActiveCtrl(panel, PANEL_SCAN_TXT_SERIAL);
+        PanelScan_SetInputState(panel, True, False);
+        SetActiveCtrl(panel, PANEL_SCAN_TXT_SLOT);
         return 0;
 }
 
-static int PanelScan_EnqueueSlots(const char *slotInput, const char *serial, char *statusText, int statusTextSize)
+static int CVICALLBACK PanelScan_SlotCallback(int panel, int control, int event,
+        void *callbackData, int eventData1, int eventData2)
 {
-        char szSlotTokens[256] = {0};
+        char szValidatedSlot[64] = {0};
+        char szStatus[256] = {0};
         char szExpectedSlot[64] = {0};
-        char szTokenCopy[64] = {0};
-        char *token = NULL;
-        int iQueuedCount = 0;
 
-        if (slotInput == NULL || serial == NULL)
+        if (event != EVENT_COMMIT)
         {
                 return 0;
         }
 
-        strncpy(szSlotTokens, slotInput, sizeof(szSlotTokens) - 1);
-
-        token = strtok(szSlotTokens, ",; \t\r\n");
-        while (token != NULL)
+        if (!PanelScan_ValidateSlotInput(panel, szValidatedSlot, sizeof(szValidatedSlot), szStatus, sizeof(szStatus)))
         {
-                memset(szTokenCopy, 0, sizeof(szTokenCopy));
-                strncpy(szTokenCopy, token, sizeof(szTokenCopy) - 1);
-                TrimWhitespace(szTokenCopy);
+                FixtureScan_GetNextSlotId(szExpectedSlot, sizeof(szExpectedSlot));
+                PanelScan_UpdateStatus(szStatus, szExpectedSlot);
+                PanelScan_SetInputState(panel, True, False);
+                SetActiveCtrl(panel, PANEL_SCAN_TXT_SLOT);
+                return 0;
+        }
 
-                if (strlen(szTokenCopy) > 0)
+        Fmt(szStatus, "SLOT %s validated. Scan SERIAL then press Enter.", szValidatedSlot);
+        PanelScan_UpdateStatus(szStatus, szValidatedSlot);
+        PanelScan_SetInputState(panel, True, True);
+        SetActiveCtrl(panel, PANEL_SCAN_TXT_SERIAL);
+
+        return 0;
+}
+
+static int CVICALLBACK PanelScan_SerialCallback(int panel, int control, int event,
+        void *callbackData, int eventData1, int eventData2)
+{
+        char szExpectedSlot[64] = {0};
+        char szStatus[256] = {0};
+
+        if (event != EVENT_COMMIT)
+        {
+                return 0;
+        }
+
+        if (!PanelScan_QueueCurrentInput(panel, szStatus, sizeof(szStatus)))
+        {
+                FixtureScan_GetNextSlotId(szExpectedSlot, sizeof(szExpectedSlot));
+                PanelScan_UpdateStatus(szStatus, szExpectedSlot);
+                return 0;
+        }
+
+        PanelScan_RefreshQueueList();
+        FixtureScan_GetNextSlotId(szExpectedSlot, sizeof(szExpectedSlot));
+        SetCtrlVal(panel, PANEL_SCAN_TXT_SLOT, "");
+        SetCtrlVal(panel, PANEL_SCAN_TXT_SERIAL, "");
+        PanelScan_SetInputState(panel, True, False);
+
+        Fmt(szStatus, "Queued SLOT successfully. Next expected SLOT: %s", szExpectedSlot);
+        PanelScan_UpdateStatus(szStatus, szExpectedSlot);
+        SetActiveCtrl(panel, PANEL_SCAN_TXT_SLOT);
+
+        return 0;
+}
+
+static void PanelScan_SetInputState(int panel, int boSlotEnabled, int boSerialEnabled)
+{
+        SetCtrlAttribute(panel, PANEL_SCAN_TXT_SLOT, ATTR_CTRL_MODE, boSlotEnabled ? VAL_HOT : VAL_INDICATOR);
+        SetCtrlAttribute(panel, PANEL_SCAN_TXT_SERIAL, ATTR_CTRL_MODE, boSerialEnabled ? VAL_HOT : VAL_INDICATOR);
+}
+
+static int PanelScan_ValidateSlotInput(int panel, char *slotOut, int slotOutSize, char *statusText, int statusTextSize)
+{
+        char szExpectedSlot[64] = {0};
+        char szSlotInput[256] = {0};
+
+        if (slotOut == NULL || slotOutSize <= 0)
+        {
+                return False;
+        }
+
+        GetCtrlVal(panel, PANEL_SCAN_TXT_SLOT, szSlotInput);
+        TrimWhitespace(szSlotInput);
+
+        if (strlen(szSlotInput) == 0)
+        {
+                if (statusText != NULL && statusTextSize > 0)
                 {
-                        FixtureScan_GetNextSlotId(szExpectedSlot, sizeof(szExpectedSlot));
-
-                        if (StrICmp(szExpectedSlot, szTokenCopy) != 0)
-                        {
-                                if (statusText != NULL && statusTextSize > 0)
-                                {
-                                        Fmt(statusText, "Scanned SLOT '%s' is not the expected SLOT. Expected: %s", szTokenCopy, szExpectedSlot);
-                                }
-                                return 0;
-                        }
-
-                        if (!FixtureScan_Enqueue(szExpectedSlot, serial))
-                        {
-                                if (statusText != NULL && statusTextSize > 0)
-                                {
-                                        strncpy(statusText, "Failed to queue DUT. Check logs.", statusTextSize - 1);
-                                }
-                                return 0;
-                        }
-
-                        FixtureSlot_SetActiveId(szExpectedSlot);
-                        iQueuedCount++;
+                        strncpy(statusText, "SLOT is required.", statusTextSize - 1);
                 }
-
-                token = strtok(NULL, ",; \t\r\n");
+                return False;
         }
 
-        if (iQueuedCount <= 0 && statusText != NULL && statusTextSize > 0)
+        FixtureScan_GetNextSlotId(szExpectedSlot, sizeof(szExpectedSlot));
+        if (StrICmp(szExpectedSlot, szSlotInput) != 0)
         {
-                strncpy(statusText, "No valid SLOT values found.", statusTextSize - 1);
+                if (statusText != NULL && statusTextSize > 0)
+                {
+                        Fmt(statusText, "Scanned SLOT '%s' is not expected. Expected: %s", szSlotInput, szExpectedSlot);
+                }
+                return False;
         }
 
-        return iQueuedCount;
+        strncpy(slotOut, szExpectedSlot, slotOutSize - 1);
+
+        return True;
+}
+
+static int PanelScan_QueueCurrentInput(int panel, char *statusText, int statusTextSize)
+{
+        char szValidatedSlot[64] = {0};
+        char szSerial[256] = {0};
+
+        if (!PanelScan_ValidateSlotInput(panel, szValidatedSlot, sizeof(szValidatedSlot), statusText, statusTextSize))
+        {
+                return False;
+        }
+
+        GetCtrlVal(panel, PANEL_SCAN_TXT_SERIAL, szSerial);
+        TrimWhitespace(szSerial);
+
+        if (strlen(szSerial) == 0)
+        {
+                if (statusText != NULL && statusTextSize > 0)
+                {
+                        strncpy(statusText, "SERIAL is required.", statusTextSize - 1);
+                }
+                return False;
+        }
+
+        if (!FixtureScan_Enqueue(szValidatedSlot, szSerial))
+        {
+                if (statusText != NULL && statusTextSize > 0)
+                {
+                        strncpy(statusText, "Failed to queue DUT. Check logs.", statusTextSize - 1);
+                }
+                return False;
+        }
+
+        FixtureSlot_SetActiveId(szValidatedSlot);
+
+        return True;
 }
 
 static int CVICALLBACK PanelScan_CancelCallback(int panel, int control, int event,
@@ -271,6 +345,7 @@ static int CVICALLBACK PanelScan_CancelCallback(int panel, int control, int even
 
         SetCtrlVal(panel, PANEL_SCAN_TXT_SLOT, "");
         SetCtrlVal(panel, PANEL_SCAN_TXT_SERIAL, "");
+        PanelScan_SetInputState(panel, True, False);
         PanelScan_RefreshQueueList();
         PanelScan_UpdateStatus("Queue cleared.", szExpectedSlot);
 
