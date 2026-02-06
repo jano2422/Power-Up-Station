@@ -788,6 +788,7 @@ short __stdcall app_GetUnit(char *szUnitIdType,char *szUnitId)
 	//Calamba
 	strcpy(g_szSerialId,szUnitId);
 	setStatus(validBarcode);
+	setStatus(TESTING); 
 
 	return( 1 );
 }
@@ -1039,7 +1040,7 @@ short __stdcall app_TestRunStart (short sSlot, short sIdx, short sRun)
 	memset(g_szTextInfo, 0, sizeof(g_szTextInfo));
 	
 	//Calamba
-	setStatus(TESTING);
+	
 
 	return( 1 );
 }

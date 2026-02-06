@@ -324,7 +324,7 @@ static void ApplyQueuedRequest(const TFixtureScanRequest *pRequest)
     FixtureSlot_SetActiveId(pRequest->szFixtureId);
     strcpy(g_szScanTmpSn, pRequest->szDutSerial);
     strcpy(g_UnitInfo.szUnitId, g_szScanTmpSn);
-    strcpy(g_UnitInfo.szUnitIdType, "SMR_TMP_SN");
+    strcpy(g_UnitInfo.szUnitIdType, "SMR_FIN_SN");   //CHANGE TO FIN FROM TMP
     strcpy(g_szSerialId, g_szScanTmpSn);
 
     WriteToDataWin("[SYSTEM] Using queued DUT %s on %s (remaining %d)",
@@ -691,6 +691,7 @@ short sRunSps(void)
         // --------------------------------------------------------------------------------------------
         case sScanAndVerifyIfValidForStation:
 
+			setStatus(TESTING);
             // Basic checks
             if (strlen(g_szScanTmpSn) == 0)
             {
@@ -906,7 +907,7 @@ short sRunSps(void)
         // 7) DUT PASS handling
         // --------------------------------------------------------------------------------------------
         case sDutPass:
-
+			 setStatus(PASS); 
             dHandlingTime = Timer();
 
             
@@ -929,6 +930,7 @@ short sRunSps(void)
         // --------------------------------------------------------------------------------------------
         case sDutFail:
 
+			setStatus(FAIL); 
             dHandlingTime = Timer();
 
             

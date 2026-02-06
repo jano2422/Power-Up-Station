@@ -457,7 +457,7 @@ static void MultiDutUi_UpdateLedColor(int slotIndex)
             color = VAL_BLUE;
             break;
         case MULTI_DUT_STATE_BATCH_POWER:
-            color = VAL_YELLOW;
+            color = VAL_MAGENTA;
             break;
         case MULTI_DUT_STATE_TESTING:
             color = VAL_YELLOW;
@@ -802,10 +802,8 @@ static int MultiDutUi_ToggleSlotEnabled(int slotIndex)
         }
     }
 
-    if (!PromptPopup("Slot Access", "Enter password to enable/disable slot", szPassword, sizeof(szPassword) - 1))
-    {
-        return 0;
-    }
+    PromptPopup("Slot Access", "Enter password to enable/disable slot", szPassword, sizeof(szPassword) - 1);
+   
 
     if (strcmp(szPassword, "ADASSCR2026") != 0)
     {
