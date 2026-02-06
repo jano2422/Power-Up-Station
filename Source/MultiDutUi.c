@@ -456,6 +456,9 @@ static void MultiDutUi_UpdateLedColor(int slotIndex)
         case MULTI_DUT_STATE_QUEUED:
             color = VAL_BLUE;
             break;
+        case MULTI_DUT_STATE_BATCH_POWER:
+            color = VAL_YELLOW;
+            break;
         case MULTI_DUT_STATE_TESTING:
             color = VAL_YELLOW;
             break;
@@ -596,6 +599,8 @@ static const char *MultiDutUi_StateText(MultiDutState state)
             return "Idle";
         case MULTI_DUT_STATE_QUEUED:
             return "Queued";
+        case MULTI_DUT_STATE_BATCH_POWER:
+            return "Batch Power";
         case MULTI_DUT_STATE_TESTING:
             return "Testing";
         case MULTI_DUT_STATE_PASS:
