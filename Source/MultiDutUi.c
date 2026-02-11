@@ -488,7 +488,7 @@ static void MultiDutUi_UpdateLedColor(int slotIndex)
             break;
         case MULTI_DUT_STATE_IDLE:
         default:
-            color = VAL_DK_GRAY;
+            color = VAL_LT_GRAY;
             break;
     }
 

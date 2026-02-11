@@ -540,20 +540,26 @@ short __stdcall app_Mode3Start (void)
 	SetPanelAttribute (g_hdlToolPanel, ATTR_TITLE, _STATION_NAME);   
 	
         DisplayPanel (g_hdlToolPanel);
-    status_init ();
-
-    setStatus(READY);
-
-    if ( iConfigureSwFromFrames (".\\FRAMES.CFG") ) {
+		
+		    
+		
+		if ( iConfigureSwFromFrames (".\\FRAMES.CFG") ) {
             WriteToErrorWin("Error on configuring SW from frames.cfg");
             return( 0 );
-    }
+    
+		}
 	
-	if ( iGetPathsFromFrames (".\\FRAMES.CFG") ) {
-		WriteToErrorWin("Error on loading paths from frames.cfg"); 
-		return( 0 );	
-	}
+	
+		if ( iGetPathsFromFrames (".\\FRAMES.CFG") ) {
+	
+			WriteToErrorWin("Error on loading paths from frames.cfg"); 
+		
+	
+			return( 0 );	
+	
+		}
 
+		
         if(iGetInterfaceFromFrames (".\\Frames.cfg")){
 
                 WriteToErrorWin("Error on GetInterfaceFromFrames");
@@ -561,6 +567,13 @@ short __stdcall app_Mode3Start (void)
         }
 
         FixtureSlot_Initialize(-1, -1, -1);
+    
+		status_init ();
+
+    
+		setStatus(READY);
+
+
 	
 	
 	iResult = GetCompName(szMachineName);
