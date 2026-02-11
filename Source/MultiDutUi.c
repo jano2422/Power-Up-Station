@@ -822,7 +822,10 @@ static int MultiDutUi_ToggleSlotEnabled(int slotIndex)
         }
     }
 
-    PromptPopup("Slot Access", "Enter password to enable/disable slot", szPassword, sizeof(szPassword) - 1);
+    if (!PasswordPopup("Slot Access", "Enter password to enable/disable slot", szPassword, sizeof(szPassword) - 1))
+    {
+        return 0;
+    }
    
 
     if (strcmp(szPassword, "ADASSCR2026") != 0)
