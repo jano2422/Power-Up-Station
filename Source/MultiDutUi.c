@@ -782,6 +782,7 @@ int PasswordPopup(const char titleString[], const char messageString[], char pas
     int popupResult;
     int titleAttrError;
     int tooltipError;
+    int passwordMaskError;
 
     if (passwordString == NULL || passwordStringLength <= 0)
     {
@@ -809,6 +810,27 @@ int PasswordPopup(const char titleString[], const char messageString[], char pas
                                     ATTR_TOOLTIP_TEXT,
                                     (messageString != NULL) ? messageString : "Enter password");
     if (tooltipError < 0)
+    {
+        /* ignore; dialog still usable */
+    }
+
+    passwordMaskError = 0;
+#ifdef ATTR_PASSWORD_MODE
+    passwordMaskError = SetCtrlAttribute(panelHandle,
+                                         PANEL_PW_PANEL_PASSWORD_STRING,
+                                         ATTR_PASSWORD_MODE,
+                                         1);
+#ifdef ATTR_PASSWORD_CHARACTER
+    if (passwordMaskError >= 0)
+    {
+        passwordMaskError = SetCtrlAttribute(panelHandle,
+                                             PANEL_PW_PANEL_PASSWORD_STRING,
+                                             ATTR_PASSWORD_CHARACTER,
+                                             '*');
+    }
+#endif
+#endif
+    if (passwordMaskError < 0)
     {
         /* ignore; dialog still usable */
     }
