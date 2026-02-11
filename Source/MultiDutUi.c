@@ -9,6 +9,8 @@
 #include "PnlTools.h"
 #include "FixtureSlot.h"
 
+int PasswordPopup(const char titleString[], const char messageString[], char passwordString[], int passwordStringLength);
+
 #define MULTI_DUT_SLOT_COUNT 32
 #define MULTI_DUT_RESULT_COLUMNS 9
 #define MULTI_DUT_INFO_ROWS 1
@@ -822,7 +824,10 @@ static int MultiDutUi_ToggleSlotEnabled(int slotIndex)
         }
     }
 
-    PromptPopup("Slot Access", "Enter password to enable/disable slot", szPassword, sizeof(szPassword) - 1);
+    if (!PasswordPopup("Slot Access", "Enter password to enable/disable slot", szPassword, sizeof(szPassword) - 1))
+    {
+        return 0;
+    }
    
 
     if (strcmp(szPassword, "ADASSCR2026") != 0)
