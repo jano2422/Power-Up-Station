@@ -156,6 +156,17 @@ int MultiDutUi_Init(void)
         g_aSlotData[iSlot].results = NULL;
         g_aSlotData[iSlot].resultCount = 0;
         g_aSlotData[iSlot].resultCapacity = 0;
+
+        {
+            char szSlotId[32] = {0};
+            sprintf(szSlotId, "SLOT_%02d", iSlot + 1);
+            if (!FixtureSlot_IsEnabledById(szSlotId))
+            {
+                g_aSlotData[iSlot].state = MULTI_DUT_STATE_DISABLED;
+                strcpy(g_aSlotData[iSlot].note, "Slot disabled");
+            }
+        }
+
         MultiDutUi_UpdateTimestamp(&g_aSlotData[iSlot]);
         MultiDutUi_UpdateLedColor(iSlot);
     }
@@ -204,7 +215,10 @@ void MultiDutUi_SetSlotState(const char *slotId, MultiDutState state, const char
         return;
     }
 
-    g_aSlotData[slotIndex].state = state;
+    if (g_aSlotData[slotIndex].state != MULTI_DUT_STATE_DISABLED)
+    {
+        g_aSlotData[slotIndex].state = state;
+    }
 
     if (serialNumber != NULL)
     {
@@ -451,6 +465,7 @@ static void MultiDutUi_UpdateLedColor(int slotIndex)
         return;
     }
 
+
     switch (g_aSlotData[slotIndex].state)
     {
         case MULTI_DUT_STATE_QUEUED:
@@ -467,6 +482,9 @@ static void MultiDutUi_UpdateLedColor(int slotIndex)
             break;
         case MULTI_DUT_STATE_FAIL:
             color = VAL_RED;
+            break;
+        case MULTI_DUT_STATE_DISABLED:
+            color = VAL_BLACK;
             break;
         case MULTI_DUT_STATE_IDLE:
         default:
@@ -607,6 +625,8 @@ static const char *MultiDutUi_StateText(MultiDutState state)
             return "Pass";
         case MULTI_DUT_STATE_FAIL:
             return "Fail";
+        case MULTI_DUT_STATE_DISABLED:
+            return "Disabled";
         default:
             return "Unknown";
     }
@@ -819,13 +839,25 @@ static int MultiDutUi_ToggleSlotEnabled(int slotIndex)
 
     if (iNewEnabled)
     {
+        g_aSlotData[slotIndex].state = MULTI_DUT_STATE_IDLE;
+        strcpy(g_aSlotData[slotIndex].note, "Awaiting assignment");
         WriteToDataWin("[FixtureSlot] %s enabled", szSlotId);
         MessagePopup("Slot Access", "Slot enabled");
     }
     else
     {
+        g_aSlotData[slotIndex].state = MULTI_DUT_STATE_DISABLED;
+        strcpy(g_aSlotData[slotIndex].note, "Slot disabled");
         WriteToDataWin("[FixtureSlot] %s disabled", szSlotId);
         MessagePopup("Slot Access", "Slot disabled");
+    }
+
+    MultiDutUi_UpdateTimestamp(&g_aSlotData[slotIndex]);
+    MultiDutUi_UpdateLedColor(slotIndex);
+    if (g_iSelectedSlot == slotIndex)
+    {
+        MultiDutUi_UpdateResultTable();
+        MultiDutUi_UpdateSelectedInfoTable();
     }
 
     return 0;
