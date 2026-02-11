@@ -9,6 +9,8 @@
 #include "PnlTools.h"
 #include "FixtureSlot.h"
 
+int PasswordPopup(const char titleString[], const char messageString[], char passwordString[], int passwordStringLength);
+
 #define MULTI_DUT_SLOT_COUNT 32
 #define MULTI_DUT_RESULT_COLUMNS 9
 #define MULTI_DUT_INFO_ROWS 1
