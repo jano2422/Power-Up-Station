@@ -8,8 +8,14 @@
 #include "MultiDutUi.h"
 #include "PnlTools.h"
 #include "FixtureSlot.h"
+#include "PasswordPopup.h"
 
 int PasswordPopup(const char titleString[], const char messageString[], char passwordString[], int passwordStringLength);
+
+typedef struct
+{
+    int accepted;
+} PasswordPopupContext;
 
 #define MULTI_DUT_SLOT_COUNT 32
 #define MULTI_DUT_RESULT_COLUMNS 9
@@ -110,6 +116,8 @@ static void MultiDutUi_SetResultRowPlaceholder(const SlotUiState *pSlot);
 static void MultiDutUi_SetResultRowFromEntry(int rowIndex, const SlotUiState *pSlot, const SlotResultEntry *pEntry);
 static void MultiDutUi_EnsureInfoTableRow(void);
 static void MultiDutUi_SetSelectedInfoRow(const SlotUiState *pSlot);
+static int CVICALLBACK PasswordPopup_OkCallback(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
+static int CVICALLBACK PasswordPopup_CancelCallback(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 
 
 
@@ -765,6 +773,115 @@ static void MultiDutUi_SetSelectedInfoRow(const SlotUiState *pSlot)
         MakeRect(1, 1, 1, MULTI_DUT_INFO_COLUMNS),
         (void *)values,
         VAL_ROW_MAJOR);
+}
+
+int PasswordPopup(const char titleString[], const char messageString[], char passwordString[], int passwordStringLength)
+{
+    int panelHandle;
+    PasswordPopupContext popupContext;
+    int popupResult;
+    int titleAttrError;
+    int tooltipError;
+
+    if (passwordString == NULL || passwordStringLength <= 0)
+    {
+        return 0;
+    }
+
+    passwordString[0] = '\0';
+
+    panelHandle = LoadPanel(0, "PasswordPopup.uir", PANEL_PW);
+    if (panelHandle < 0)
+    {
+        return 0;
+    }
+
+    popupContext.accepted = 0;
+
+    titleAttrError = SetPanelAttribute(panelHandle, ATTR_TITLE, (titleString != NULL) ? titleString : "Password");
+    if (titleAttrError < 0)
+    {
+        /* ignore; dialog still usable */
+    }
+
+    tooltipError = SetCtrlAttribute(panelHandle,
+                                    PANEL_PW_PANEL_PASSWORD_STRING,
+                                    ATTR_TOOLTIP_TEXT,
+                                    (messageString != NULL) ? messageString : "Enter password");
+    if (tooltipError < 0)
+    {
+        /* ignore; dialog still usable */
+    }
+
+    SetCtrlVal(panelHandle, PANEL_PW_PANEL_PASSWORD_STRING, "");
+    InstallCtrlCallback(panelHandle, PANEL_PW_PANEL_PASSWORD_OK_BTN, PasswordPopup_OkCallback, &popupContext);
+    InstallCtrlCallback(panelHandle, PANEL_PW_PANEL_PASSWORD_CANCEL, PasswordPopup_CancelCallback, &popupContext);
+
+    DisplayPanel(panelHandle);
+    RunUserInterface();
+
+    popupResult = popupContext.accepted;
+    if (popupResult)
+    {
+        GetCtrlVal(panelHandle, PANEL_PW_PANEL_PASSWORD_STRING, passwordString);
+        passwordString[passwordStringLength - 1] = '\0';
+    }
+
+    DiscardPanel(panelHandle);
+
+    return popupResult;
+}
+
+static int CVICALLBACK PasswordPopup_OkCallback(int panel,
+                                                int control,
+                                                int event,
+                                                void *callbackData,
+                                                int eventData1,
+                                                int eventData2)
+{
+    PasswordPopupContext *popupContext;
+
+    (void)panel;
+    (void)control;
+    (void)eventData1;
+    (void)eventData2;
+
+    if (event != EVENT_COMMIT || callbackData == NULL)
+    {
+        return 0;
+    }
+
+    popupContext = (PasswordPopupContext *)callbackData;
+    popupContext->accepted = 1;
+    QuitUserInterface(0);
+
+    return 0;
+}
+
+static int CVICALLBACK PasswordPopup_CancelCallback(int panel,
+                                                    int control,
+                                                    int event,
+                                                    void *callbackData,
+                                                    int eventData1,
+                                                    int eventData2)
+{
+    PasswordPopupContext *popupContext;
+
+    (void)panel;
+    (void)control;
+    (void)eventData1;
+    (void)eventData2;
+
+    if (event != EVENT_COMMIT || callbackData == NULL)
+    {
+        return 0;
+    }
+
+    popupContext = (PasswordPopupContext *)callbackData;
+    popupContext->accepted = 0;
+    QuitUserInterface(0);
+
+    return 0;
 }
 
 
